@@ -29,23 +29,14 @@ CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
 #include "MSP_OSD.h"
 #include "OSD_positions_config.h"
 
-#define ANALOG_IN                A0    // Voltage Read pin (notice this is now Pin 0, instead of Pin 1)
-#define VOLT_DIVIDER             48    // Set to 1024/full scale voltage
-//#define DEBUG                          //uncomment to see diagnostics from USB serial
-
 #define FC_FIRMWARE_NAME          "Betaflight"
 #define FC_FIRMWARE_IDENTIFIER    "BTFL"
 
-HardwareSerial &mspSerial = Serial1;
+HardwareSerial &mspSerial = Serial;
 MSP msp;
 
 // Arm Logic
 uint32_t unarmedMillis = 3000;   // number of milliseconds to wait before arming, after AU is initialized. Recommend at least 3000 (3 seconds).
-
-//Voltage and Battery Reading
-float averageVoltage = 0;
-int sampleVoltageCount = 0;
-int lastCount = 0;
 
 boolean lightOn = true;
 
@@ -78,13 +69,11 @@ msp_analog_t analog = { 0 };
 
 void setup() {
   #ifdef DEBUG
-    SerialUSB.begin(115200);
-    //while (!SerialUSB);
+    Serial.begin(115200);
   #endif
-  Serial1.begin(115200);
-  while (!Serial1);
+  while (!Serial);
 
-  analogReadResolution(12); // SAMD21 12 bit resolution 0 - 4096 range on Analog pin
+  //analogReadResolution(12); // SAMD21 12 bit resolution 0 - 4096 range on Analog pin
 
   msp.begin(mspSerial);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -108,7 +97,6 @@ void setup() {
 
 void loop() { 
    
-
   if (!activityDetected) {
     #ifdef DEBUG
       Serial.println("Waiting for AU...");
@@ -132,35 +120,18 @@ void loop() {
   if ((uint32_t)(currentMillis_MSP - previousMillis_MSP) >= next_interval_MSP) {
     previousMillis_MSP = currentMillis_MSP;
 
-    if (general_counter % 300 == 0) {  // update the altitude and voltage values every 300ms
-      getVoltageSample();
-      if (lightOn) {
-        digitalWrite(LED_BUILTIN, LOW);
-      } else {
-        digitalWrite(LED_BUILTIN, HIGH);
-      }
-      lightOn = !lightOn;
-    }
-
     if (currentMillis_MSP < (activityDetectedMillis_MSP + unarmedMillis)) {
       set_flight_mode_flags(false);
     } else {
       set_flight_mode_flags(true);
     }
 
-#ifdef DEBUG
-    //debugPrint();
-#endif
     send_msp_to_airunit();
     general_counter += next_interval_MSP;
   }
   if (custom_mode != previousFlightMode) {
     previousFlightMode = custom_mode;
     display_flight_mode();
-  }
-
-  if (batteryCellCount == 0 && vbat > 0) {
-    set_battery_cells_number();
   }
 
   //display flight mode every 10s
@@ -296,50 +267,18 @@ void send_msp_to_airunit() {
   status_DJI.armingFlags = 0x0000;
   msp.send(MSP_STATUS, &status_DJI, sizeof(status_DJI));
 
-  //MSP_BATTERY_STATE
-  battery_state.amperage = 0;
-  battery_state.batteryVoltage = vbat * 10;
-  battery_state.mAhDrawn = 0;
-  battery_state.batteryCellCount = batteryCellCount;
-  battery_state.batteryCapacity = 0;
-  battery_state.batteryState = 0;
-  battery_state.legacyBatteryVoltage = vbat;
-  msp.send(MSP_BATTERY_STATE, &battery_state, sizeof(battery_state));
- 
-  //MSP_OSD_CONFIG
-  send_osd_config();
 }
 
 void show_text(char (*text)[15]) {
   memcpy(craftname, *text, sizeof(craftname));
 }
 
-void set_battery_cells_number() {
-  if (vbat < 43) batteryCellCount = 1;
-  else if (vbat < 85) batteryCellCount = 2;
-  else if (vbat < 127) batteryCellCount = 3;
-  else if (vbat < 169) batteryCellCount = 4;
-  else if (vbat < 211) batteryCellCount = 5;
-  else if (vbat < 255) batteryCellCount = 6;
-}
-
-
-
-void getVoltageSample() {
-  vbat = analogRead(ANALOG_IN)*10/VOLT_DIVIDER;
-}
 
 //*** USED ONLY FOR DEBUG ***
 void debugPrint() {
-  SerialUSB.println("**********************************");
-  SerialUSB.print("Flight Mode: ");
-  SerialUSB.println(flightModeFlags);
-  SerialUSB.print("Voltage: ");
-  SerialUSB.println(((double)vbat / 10), 1);
-  SerialUSB.print("Sample Count / transmit: ");
-  SerialUSB.println(lastCount);
-  SerialUSB.print("Battery Cell Count: ");
-  SerialUSB.println(batteryCellCount);
+  Serial.println("**********************************");
+  Serial.print("Flight Mode: ");
+  Serial.println(flightModeFlags);
 }
 
 
