@@ -32,7 +32,11 @@ CONSEQUENTIAL DAMAGES, FOR ANY REASON WHATSOEVER.
 #define FC_FIRMWARE_NAME          "Betaflight"
 #define FC_FIRMWARE_IDENTIFIER    "BTFL"
 
-HardwareSerial &mspSerial = Serial;
+#define LED_BUILTIN D10
+#define DEBUG 1
+
+
+HardwareSerial &mspSerial = Serial1;
 MSP msp;
 
 // Arm Logic
@@ -74,6 +78,12 @@ void setup() {
   while (!Serial);
 
   //analogReadResolution(12); // SAMD21 12 bit resolution 0 - 4096 range on Analog pin
+
+  int8_t rxPin = D3;
+  int8_t txPin = D4;
+  // mspSerial.setPins(rxPin, txPin);
+
+  mspSerial.begin(115200, SERIAL_8N1, rxPin, txPin);
 
   msp.begin(mspSerial);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -125,6 +135,10 @@ void loop() {
     } else {
       set_flight_mode_flags(true);
     }
+
+  #ifdef DEBUG
+      debugPrint();
+  #endif
 
     send_msp_to_airunit();
     general_counter += next_interval_MSP;
@@ -266,6 +280,17 @@ void send_msp_to_airunit() {
   msp.send(MSP_STATUS_EX, &status_DJI, sizeof(status_DJI));
   status_DJI.armingFlags = 0x0000;
   msp.send(MSP_STATUS, &status_DJI, sizeof(status_DJI));
+
+  battery_state.amperage = 0;
+  battery_state.batteryVoltage = 11.7 * 10;
+  battery_state.mAhDrawn = 0;
+  battery_state.batteryCellCount = 3;
+  battery_state.batteryCapacity = 0;
+  battery_state.batteryState = 0;
+  battery_state.legacyBatteryVoltage = 11.7;
+  msp.send(MSP_BATTERY_STATE, &battery_state, sizeof(battery_state));
+
+  send_osd_config();  
 
 }
 
